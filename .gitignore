@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.env.local
+*.db
+*.db-journal
+dist
+# Google service account keys
+*-service-account*.json
+rohan-2906-*.json

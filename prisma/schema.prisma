@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SUB_ADMIN
+  TPM
+  PL
+  QUALITY_LEAD
+  EMPLOYEE
+}
+
+enum Position {
+  TPM
+  PL
+  QUALITY_LEAD
+  TASKER
+  INTERN_TASKER
+  ENGINEERING_SUPPORT
+  RESEARCH_SUPPORT
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationEvent {
+  REQUEST_CREATED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  REQUEST_PARTIALLY_APPROVED
+  TRANSFER_COMPLETED
+}
+
+enum CandidateProposer {
+  REQUESTER
+  SOURCE
+}
+
+enum CandidateDecision {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LEAVE
+  ABSENT
+  UNKNOWN
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  name               String?
+  email              String     @unique
+  emailVerified      DateTime?
+  image              String?
+  role               Role       @default(EMPLOYEE)
+  passwordHash       String?
+  mustChangePassword Boolean    @default(false)
+  isActive           Boolean    @default(true)
+  lastLogin          DateTime?
+  passwordChangedAt  DateTime?
+  passwordResetAt    DateTime?
+  employee           Employee?
+  accounts           Account[]
+  sessions           Session[]
+  createdRequests    ResourceRequest[]
+  decisions          RequestApproval[]
+  proposedCandidates RequestCandidate[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  syncRuns           SyncHistory[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+model SyncHistory {
+  id           String    @id @default(cuid())
+  source       String
+  status       String
+  startedById  String?
+  imported     Int       @default(0)
+  updated      Int       @default(0)
+  duplicates   Int       @default(0)
+  errors       Json?
+  durationMs   Int       @default(0)
+  message      String?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  startedBy    User?     @relation(fields: [startedById], references: [id], onDelete: SetNull)
+
+  @@index([startedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Project {
+  id               String            @id @default(cuid())
+  name             String            @unique
+  description      String?
+  type             String?
+  status           String            @default("ACTIVE")
+  active           Boolean           @default(true)
+  employees        Employee[]
+  incomingRequests ResourceRequest[] @relation("IncomingRequests")
+  outgoingRequests ResourceRequest[] @relation("OutgoingRequests")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Employee {
+  id               String           @id @default(cuid())
+  name             String
+  email            String           @unique
+  position         Position
+  projectId        String
+  userId           String?          @unique
+  attendanceStatus AttendanceStatus?
+  attendanceDate   DateTime?
+  lastSyncedAt     DateTime?
+  source           String?
+  project          Project          @relation(fields: [projectId], references: [id])
+  user             User?            @relation(fields: [userId], references: [id])
+  approvals        RequestApproval[]
+  candidates       RequestCandidate[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([projectId, position])
+  @@index([attendanceStatus])
+}
+
+model ResourceRequest {
+  id                   String              @id @default(cuid())
+  title                String
+  requestingProjectId  String
+  sourceProjectId      String
+  plNeeded             Int                 @default(0)
+  taskersNeeded        Int                 @default(0)
+  qualityLeadsNeeded   Int                 @default(0)
+  priority             Priority
+  justification        String
+  requiredBy           DateTime
+  status               RequestStatus       @default(PENDING)
+  createdById          String
+  requestingProject    Project             @relation("OutgoingRequests", fields: [requestingProjectId], references: [id])
+  sourceProject        Project             @relation("IncomingRequests", fields: [sourceProjectId], references: [id])
+  createdBy            User                @relation(fields: [createdById], references: [id])
+  approvals            RequestApproval[]
+  candidates           RequestCandidate[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([status, priority])
+  @@index([sourceProjectId, status])
+}
+
+model RequestCandidate {
+  id                String            @id @default(cuid())
+  requestId         String
+  employeeId        String
+  proposedBy        CandidateProposer
+  proposedById      String
+  requesterDecision CandidateDecision @default(PENDING)
+  sourceDecision    CandidateDecision @default(PENDING)
+  note              String?
+  request           ResourceRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  employee          Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  proposer          User              @relation(fields: [proposedById], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([requestId, employeeId])
+  @@index([requestId])
+}
+
+model RequestApproval {
+  id          String          @id @default(cuid())
+  requestId   String
+  employeeId  String
+  decidedById String
+  decision    RequestStatus
+  note        String?
+  request     ResourceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  employee    Employee        @relation(fields: [employeeId], references: [id])
+  decidedBy   User            @relation(fields: [decidedById], references: [id])
+  createdAt   DateTime        @default(now())
+
+  @@unique([requestId, employeeId])
+}
+
+model Notification {
+  id        String            @id @default(cuid())
+  userId    String
+  requestId String?
+  event     NotificationEvent
+  title     String
+  body      String
+  readAt    DateTime?
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request   ResourceRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  createdAt DateTime          @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id             String           @id @default(cuid())
+  userId         String?
+  requestId      String?
+  action         String
+  previousStatus RequestStatus?
+  newStatus      RequestStatus?
+  metadata       Json?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  request        ResourceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+
+  @@index([action, createdAt])
+  @@index([requestId])
+}
