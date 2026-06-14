@@ -2,9 +2,31 @@ node_modules
 .next
 .env
 .env.local
+.env.production.local
+.env.development.local
 *.db
 *.db-journal
 dist
+
+# Vercel
+.vercel
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+next-env.d.ts
+
 # Google service account keys
 *-service-account*.json
 rohan-2906-*.json
+
+# IDE / OS
+.DS_Store
+.idea
+.vscode
+
+# Logs
+*.log
+npm-debug.log*
+
+# Playwright screenshots from skill verification
+.playwright-mcp

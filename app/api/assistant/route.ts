@@ -96,7 +96,8 @@ export async function POST(request: Request) {
           send("error", {
             code: "OFFLINE",
             message:
-              "Ethara Assistant is offline. Start Ollama on this machine with `ollama serve`, then try again."
+              err.message ||
+              "Ethara Assistant is offline. Verify the LLM provider is reachable and the API key is valid."
           });
         } else if (err instanceof OllamaModelMissingError) {
           send("error", {
